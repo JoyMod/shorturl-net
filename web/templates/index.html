@@ -1,0 +1,291 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ShortURL - 优雅的短链接服务</title>
+    <style>
+        :root {
+            --primary-color: #007aff; --primary-hover: #005bb5;
+            --bg-color: #000000; --card-bg-color: rgba(255, 255, 255, 0.05);
+            --text-color: #ffffff; --secondary-text-color: #8d8d92;
+            --border-color: rgba(255, 255, 255, 0.1);
+            --font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+        }
+        body {
+            font-family: var(--font-family); background-color: var(--bg-color); color: var(--text-color);
+            margin: 0; font-size: 16px; overflow-x: hidden;
+            background-image: radial-gradient(circle at 20% 20%, rgba(0, 122, 255, 0.2), transparent 30%),
+                              radial-gradient(circle at 80% 70%, rgba(255, 59, 48, 0.15), transparent 35%);
+        }
+        .navbar {
+            background-color: transparent; padding: 1rem 1.5rem;
+            position: fixed; top: 0; left: 0; right: 0; z-index: 1000;
+        }
+        .nav-link {
+            color: var(--secondary-text-color); font-weight: 500; padding: 0.5rem 1rem;
+            text-decoration: none; transition: color 0.3s;
+        }
+        .nav-link:hover { color: var(--text-color); }
+        .container { max-width: 960px; margin: 0 auto; padding: 8rem 1rem 2rem; }
+        .page { display: none; }
+        .active { display: block; animation: fadeIn 0.5s ease-in-out; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        
+        .auth-container { display: flex; justify-content: center; align-items: center; min-height: 80vh; }
+        .auth-card {
+            background: var(--card-bg-color); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+            padding: 2.5rem; border-radius: 24px; border: 1px solid var(--border-color);
+            width: 100%; max-width: 420px; text-align: center;
+        }
+        .auth-title { font-size: 2.2rem; font-weight: 700; margin-bottom: 0.5rem; }
+        .auth-subtitle { color: var(--secondary-text-color); margin-bottom: 2.5rem; }
+        .form-group { margin-bottom: 1.5rem; text-align: left; }
+        .form-group label { font-weight: 600; margin-bottom: 0.5rem; display: block; color: var(--secondary-text-color); }
+        .form-control {
+            width: 100%; padding: 1rem; border: 1px solid var(--border-color); border-radius: 12px;
+            font-size: 1rem; background-color: rgba(255, 255, 255, 0.05); color: var(--text-color);
+            box-sizing: border-box; transition: border-color 0.3s, box-shadow 0.3s;
+        }
+        .form-control:focus { outline: none; border-color: var(--primary-color); box-shadow: 0 0 0 3px rgba(0, 122, 255, 0.3); }
+        .btn {
+            padding: 1rem 1.5rem; border-radius: 12px; font-weight: 600; cursor: pointer;
+            border: none; transition: all 0.3s; display: inline-flex; align-items: center; justify-content: center;
+        }
+        .btn-primary { background-color: var(--primary-color); color: white; }
+        .btn-primary:hover { background-color: var(--primary-hover); }
+        .btn-block { width: 100%; }
+        .spinner {
+            width: 20px; height: 20px; border: 2px solid rgba(255,255,255,0.3);
+            border-top-color: white; border-radius: 50%; animation: spin 1s linear infinite; margin-right: 10px;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        
+        .shorten-container { text-align: center; max-width: 640px; margin: 0 auto; }
+        .result-card { background: var(--card-bg-color); backdrop-filter: blur(10px); padding: 2rem; border-radius: 18px; margin-top: 2rem; text-align: left; border: 1px solid var(--border-color); }
+        .short-link-display { display: flex; justify-content: space-between; align-items: center; background-color: rgba(0,0,0,0.2); padding: 1rem; border-radius: 12px; }
+        #short-link-anchor { font-weight: 600; color: var(--primary-color); text-decoration: none; font-size: 1.1rem; }
+        .btn-secondary { background-color: rgba(255,255,255,0.1); color: var(--text-color); }
+        
+        .table-responsive { background: var(--card-bg-color); backdrop-filter: blur(10px); border-radius: 18px; padding: 1rem; border: 1px solid var(--border-color); }
+        .table { border-collapse: collapse; width: 100%; }
+        .table th, .table td { padding: 1rem; text-align: left; border-bottom: 1px solid var(--border-color); }
+        .table th { font-weight: 600; color: var(--secondary-text-color); }
+        .table tbody tr:last-child td { border-bottom: none; }
+    </style>
+</head>
+<body>
+    <nav class="navbar">
+        <div style="width: 100%; max-width: 960px; margin: 0 auto; display: flex; justify-content: space-between; align-items: center;">
+            <a class="navbar-brand" href="#">ShortURL</a>
+            <div id="nav-links"></div>
+        </div>
+    </nav>
+
+    <div class="container">
+        <!-- All pages are here, managed by JS -->
+        <div id="login-page" class="page">...</div>
+        <div id="register-page" class="page">...</div>
+        <div id="shorten-page" class="page">...</div>
+        <div id="admin-page" class="page">...</div>
+    </div>
+
+    <script>
+        // --- TEMPLATES ---
+        const loginHTML = `
+            <div class="auth-container"><div class="auth-card">
+                <h1 class="auth-title">登录您的账户</h1><p class="auth-subtitle">欢迎回来！请输入您的凭据。</p>
+                <form id="login-form">
+                    <div class="form-group"><label for="login-username">用户名</label><input type="text" id="login-username" class="form-control" required></div>
+                    <div class="form-group"><label for="login-password">密码</label><input type="password" id="login-password" class="form-control" required></div>
+                    <button type="submit" class="btn btn-primary btn-block">登录</button>
+                    <div id="login-error" class="error-message"></div>
+                </form>
+                <div class="auth-footer">还没有账户？ <a id="goto-register">立即注册</a></div>
+            </div></div>`;
+        const registerHTML = `
+            <div class="auth-container"><div class="auth-card">
+                <h1 class="auth-title">创建您的账户</h1><p class="auth-subtitle">加入我们，开始创建您的短链接。</p>
+                <form id="register-form">
+                    <div class="form-group"><label for="reg-username">用户名</label><input type="text" id="reg-username" class="form-control" required minlength="3"></div>
+                    <div class="form-group"><label for="reg-email">电子邮箱</label><input type="email" id="reg-email" class="form-control" required></div>
+                    <div class="form-group"><label for="reg-password">密码</label><input type="password" id="reg-password" class="form-control" required minlength="6"></div>
+                    <button type="submit" class="btn btn-primary btn-block">注册</button>
+                    <div id="register-error" class="error-message"></div>
+                    <div id="register-success" style="color: #34c759; margin-top: 1rem;"></div>
+                </form>
+                <div class="auth-footer">已有账户？ <a id="goto-login">立即登录</a></div>
+            </div></div>`;
+        const shortenHTML = `
+            <div class="shorten-container">
+                <h1 class="shorten-title">创建您的短链接</h1><p class="shorten-subtitle">简单、快速、强大。输入您的长链接即可开始。</p>
+                <form id="shorten-form">
+                    <div class="form-group"><input type="url" id="long-url" class="form-control" placeholder="https://example.com/my-very-long-link" required></div>
+                    <button type="submit" class="btn btn-primary btn-block">生成</button>
+                </form>
+                <div id="result" class="result-card" style="display: none;">
+                    <h4>成功！</h4><p>您的短链接已创建：</p>
+                    <div class="short-link-display"><a href="" id="short-link-anchor" target="_blank"></a><button id="copy-btn" class="btn btn-secondary">复制</button></div>
+                </div>
+                <div id="shorten-error" class="error-message"></div>
+            </div>`;
+        const adminHTML = `
+            <div>
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2rem;"><h1 class="admin-title">链接管理</h1></div>
+                <div class="table-responsive"><table class="table"><thead><tr><th>短码</th><th>原始URL</th><th>点击</th><th>状态</th><th>创建时间</th><th>操作</th></tr></thead><tbody id="links-tbody"></tbody></table></div>
+            </div>`;
+
+        // --- APP LOGIC ---
+        const pages = { login: document.getElementById('login-page'), register: document.getElementById('register-page'), shorten: document.getElementById('shorten-page'), admin: document.getElementById('admin-page') };
+        const navLinks = document.getElementById('nav-links');
+
+        function showPage(pageName, html) {
+            Object.values(pages).forEach(p => p.style.display = 'none');
+            const targetPage = pages[pageName];
+            targetPage.innerHTML = html;
+            targetPage.style.display = 'block';
+            bindEventListeners(pageName);
+        }
+
+        function updateNav() {
+            const token = localStorage.getItem('jwt_token');
+            if (token) {
+                navLinks.innerHTML = `<a href="#shorten" class="nav-link">生成</a><a href="#admin" class="nav-link">管理</a><a href="#" id="logout-btn" class="nav-link">登出</a>`;
+                document.getElementById('logout-btn').addEventListener('click', logout);
+            } else {
+                navLinks.innerHTML = `<a href="#login" class="nav-link">登录</a><a href="#register" class="nav-link">注册</a>`;
+            }
+        }
+
+        function logout(e) { if(e) e.preventDefault(); localStorage.removeItem('jwt_token'); window.location.hash = '#login'; }
+
+        function handleRouting() {
+            const hash = window.location.hash || '#login';
+            const token = localStorage.getItem('jwt_token');
+            let page = hash.substring(1);
+
+            if (token) {
+                if (page === 'login' || page === 'register' || !pages[page]) page = 'shorten';
+            } else {
+                if (page !== 'login' && page !== 'register') page = 'login';
+            }
+            
+            window.location.hash = page;
+            showPage(page, eval(page + 'HTML'));
+            updateNav();
+            if (page === 'admin') fetchLinks();
+        }
+        
+        window.addEventListener('hashchange', handleRouting);
+        document.addEventListener('DOMContentLoaded', handleRouting);
+
+        function bindEventListeners(pageName) {
+            if (pageName === 'login') {
+                document.getElementById('goto-register').addEventListener('click', () => window.location.hash = '#register');
+                document.getElementById('login-form').addEventListener('submit', handleLogin);
+            }
+            if (pageName === 'register') {
+                document.getElementById('goto-login').addEventListener('click', () => window.location.hash = '#login');
+                document.getElementById('register-form').addEventListener('submit', handleRegister);
+            }
+            if (pageName === 'shorten') {
+                document.getElementById('shorten-form').addEventListener('submit', handleShorten);
+                document.getElementById('copy-btn').addEventListener('click', handleCopy);
+            }
+        }
+
+        async function handleApiRequest(button, url, options, onSuccess, onError) {
+            const originalText = button.innerHTML;
+            button.innerHTML = `<div class="spinner"></div>处理中...`;
+            button.disabled = true;
+            try {
+                const res = await fetch(url, options);
+                const data = await res.json();
+                if (!res.ok) throw new Error(data.error || '操作失败');
+                onSuccess(data);
+            } catch (err) {
+                onError(err.message);
+            } finally {
+                button.innerHTML = originalText;
+                button.disabled = false;
+            }
+        }
+
+        async function handleLogin(e) {
+            e.preventDefault();
+            const form = e.target;
+            await handleApiRequest(form.querySelector('button'), '/auth/login', {
+                method: 'POST', headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ username: form.querySelector('#login-username').value, password: form.querySelector('#login-password').value })
+            }, data => {
+                localStorage.setItem('jwt_token', data.token);
+                window.location.hash = '#shorten';
+            }, errorMsg => document.getElementById('login-error').textContent = errorMsg);
+        }
+
+        async function handleRegister(e) {
+            e.preventDefault();
+            const form = e.target;
+            await handleApiRequest(form.querySelector('button'), '/auth/register', {
+                method: 'POST', headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ username: form.querySelector('#reg-username').value, email: form.querySelector('#reg-email').value, password: form.querySelector('#reg-password').value })
+            }, () => {
+                document.getElementById('register-success').textContent = '注册成功！即将跳转到登录页...';
+                setTimeout(() => { window.location.hash = '#login'; }, 2000);
+            }, errorMsg => document.getElementById('register-error').textContent = errorMsg);
+        }
+
+        async function handleShorten(e) {
+            e.preventDefault();
+            const form = e.target;
+            await handleApiRequest(form.querySelector('button'), '/api/shorten', {
+                method: 'POST', headers: {'Content-Type': 'application/json', 'Authorization': 'Bearer ' + localStorage.getItem('jwt_token')},
+                body: JSON.stringify({ url: form.querySelector('#long-url').value })
+            }, data => {
+                const anchor = document.getElementById('short-link-anchor');
+                anchor.href = data.short_url;
+                anchor.textContent = data.short_url;
+                document.getElementById('result').style.display = 'block';
+                document.getElementById('shorten-error').textContent = '';
+            }, errorMsg => document.getElementById('shorten-error').textContent = errorMsg);
+        }
+
+        function handleCopy() {
+            const link = document.getElementById('short-link-anchor').href;
+            navigator.clipboard.writeText(link).then(() => {
+                this.textContent = '已复制!';
+                setTimeout(() => { this.textContent = '复制'; }, 2000);
+            });
+        }
+
+        async function fetchLinks() {
+            const token = localStorage.getItem('jwt_token');
+            const tbody = document.getElementById('links-tbody');
+            try {
+                const res = await fetch('/api/links', { headers: { 'Authorization': 'Bearer ' + token } });
+                if(res.status === 401) return logout();
+                const links = await res.json();
+                tbody.innerHTML = '';
+                if (!links || links.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="6" style="text-align: center; padding: 2rem;">暂无数据</td></tr>';
+                    return;
+                }
+                links.forEach(link => {
+                    tbody.innerHTML += `
+                        <tr>
+                            <td><code>${link.ShortCode}</code></td>
+                            <td style="max-width: 250px; text-overflow: ellipsis; overflow: hidden; white-space: nowrap;" title="${link.OriginalURL}">${link.OriginalURL}</td>
+                            <td>${link.ClickCount}</td>
+                            <td><span class="badge ${link.IsActive ? 'bg-success' : 'bg-secondary'}">${link.IsActive ? '活跃' : '禁用'}</span></td>
+                            <td>${new Date(link.CreatedAt).toLocaleDateString()}</td>
+                            <td><a href="/${link.ShortCode}" target="_blank" class="btn btn-sm btn-outline-primary">访问</a></td>
+                        </tr>
+                    `;
+                });
+            } catch (err) {
+                tbody.innerHTML = '<tr><td colspan="6" style="text-align: center; padding: 2rem;">加载失败</td></tr>';
+            }
+        }
+    </script>
+</body>
+</html>

@@ -1,0 +1,27 @@
+# .air.toml
+# Air 配置文件，用于热重载
+
+# 工作目录
+root = "."
+# 临时文件目录
+tmp_dir = "tmp"
+
+[build]
+# 构建命令 - 更新为新的 main.go 路径
+cmd = "go build -o ./tmp/main ./cmd/server"
+# 构建后的二进制文件
+bin = "tmp/main"
+# 监视的文件扩展名
+include_ext = ["go", "tpl", "tmpl", "html", "css", "js"]
+# 忽略的文件或目录
+exclude_dir = ["tmp", "vendor", "node_modules", "logs"]
+# 延迟执行 (毫秒)
+delay = 1000
+
+[log]
+# 显示日志时间
+time = true
+
+[misc]
+# 第一次启动时删除临时文件
+clean_on_exit = true
